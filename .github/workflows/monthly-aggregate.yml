@@ -1,0 +1,16 @@
+name: Trigger API Monthly Aggregation
+
+on:
+  schedule:
+    - cron: '0 22 1 * *'
+
+jobs:
+  trigger-aggregation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger API aggregation
+        env:
+          API_URL: ${{ secrets.API_URL }}
+          API_KEY: ${{ secrets.API_KEY }}
+        run: |
+          curl -X POST -H "X-API-Key: $API_KEY" "$API_URL/api/aggregate-monthly" 
