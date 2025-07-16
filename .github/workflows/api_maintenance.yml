@@ -1,9 +1,7 @@
-name: API Maintenance & Keep-Alive
+name: API Keep-Alive
 
 on:
   schedule:
-    # Monthly aggregation - 1st day of every month at 10 PM UTC
-    - cron: '0 22 1 * *'
     # Keep-alive ping - every 10 minutes to prevent hibernation
     - cron: '*/10 * * * *'
   workflow_dispatch: # Allow manual triggering
@@ -11,8 +9,6 @@ on:
 jobs:
   keep-alive:
     runs-on: ubuntu-latest
-    # Only run keep-alive if it's not the monthly aggregation time
-    if: github.event.schedule != '0 22 1 * *'
     steps:
       - name: Keep API Alive
         env:
@@ -25,56 +21,10 @@ jobs:
           curl -f -s -o /dev/null "$API_URL/health" || echo "Health endpoint failed"
           echo "Keep-alive ping completed"
 
-  monthly-aggregation:
-    runs-on: ubuntu-latest
-    # Only run aggregation on the 1st of the month
-    if: github.event.schedule == '0 22 1 * *' || github.event_name == 'workflow_dispatch'
-    steps:
-      - name: Ensure API is awake before aggregation
-        env:
-          API_URL: ${{ secrets.API_URL }}
-        run: |
-          echo "Warming up API before aggregation..."
-          # Wait for API to wake up if hibernated
-          for i in {1..6}; do
-            if curl -f -s -o /dev/null "$API_URL/"; then
-              echo "API is responding"
-              break
-            else
-              echo "Attempt $i: API not responding, waiting 30 seconds..."
-              sleep 30
-            fi
-          done
-
-      - name: Trigger API Monthly Aggregation
-        env:
-          API_URL: ${{ secrets.API_URL }}
-          API_KEY: ${{ secrets.API_KEY }}
-        run: |
-          echo "Triggering monthly aggregation..."
-          response=$(curl -w "%{http_code}" -s -X POST \
-            -H "X-API-Key: $API_KEY" \
-            -H "Content-Type: application/json" \
-            "$API_URL/api/aggregate-monthly")
-          
-          http_code="${response: -3}"
-          body="${response%???}"
-          
-          echo "HTTP Status: $http_code"
-          echo "Response: $body"
-          
-          if [[ "$http_code" -ge 200 && "$http_code" -lt 300 ]]; then
-            echo "Monthly aggregation completed successfully"
-          else
-            echo "Monthly aggregation failed"
-            exit 1
-          fi
-
   health-check:
     runs-on: ubuntu-latest
-    # Run health check for manual triggers or if aggregation failed
-    if: always() && (github.event_name == 'workflow_dispatch' || needs.monthly-aggregation.result == 'failure')
-    needs: [monthly-aggregation]
+    # Run health check for manual triggers
+    if: github.event_name == 'workflow_dispatch'
     steps:
       - name: API Health Check
         env:
